@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(ls /workshop/2048-react-game/node_modules/vitest/config*)",
+      "Bash(npm test:*)",
+      "Bash(curl:*)",
+      "Bash(pkill -f \"vite\")",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:play.google.com)",
+      "WebFetch(domain:www.homeniq.co.kr)",
+      "WebFetch(domain:homeniq.co.kr)",
+      "Bash(git remote:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
