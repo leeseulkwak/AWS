@@ -5,9 +5,9 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
+    port: 3004,
     host: true,
-    allowedHosts: ['.cloudfront.net'],
+    allowedHosts: ['.cloudfront.net', 'd1tvkshewqdn0d.cloudfront.net'],
   },
   test: {
     globals: true,

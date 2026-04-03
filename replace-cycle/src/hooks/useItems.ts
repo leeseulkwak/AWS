@@ -59,9 +59,10 @@ export const useItems = () => {
   }, []);
 
   const markReplaced = useCallback((id: string): void => {
+    const today = getTodayString();
     setItems((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, lastReplacedAt: getTodayString() } : item,
+        item.id === id ? { ...item, lastReplacedAt: today, completedAt: today } : item,
       ),
     );
   }, []);

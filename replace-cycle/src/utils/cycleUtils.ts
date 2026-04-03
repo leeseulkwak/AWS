@@ -40,8 +40,12 @@ export const getStatus = (daysRemaining: number): ItemStatus => {
 };
 
 export const enrichItem = (item: ConsumableItem): ItemWithStatus => {
+  const today = getTodayString();
+  const isCompletedToday = item.completedAt === today;
+
   const daysRemaining = getDaysRemaining(item.lastReplacedAt, item.intervalDays);
   const progress = getProgress(item.lastReplacedAt, item.intervalDays);
-  const status = getStatus(daysRemaining);
+  const status = isCompletedToday ? 'completed' : getStatus(daysRemaining);
+
   return { ...item, daysRemaining, progress, status };
 };

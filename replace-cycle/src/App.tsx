@@ -8,6 +8,8 @@ import { ItemCard } from './components/ItemCard';
 import { ItemForm } from './components/ItemForm';
 import { EmptyState } from './components/EmptyState';
 import { HygieneTipCard } from './components/HygieneTipCard';
+import { Toast } from './components/Toast';
+import { CalendarView } from './components/CalendarView';
 import { HYGIENE_TIPS } from './data/hygieneTips';
 import type { HygieneTip } from './data/hygieneTips';
 import './App.css';
@@ -16,7 +18,7 @@ const TABS = ['전체', '침실', '거실', '욕실', '부엌', '자동차'];
 const TAB_CATEGORIES = ['침실', '거실', '욕실', '부엌', '자동차'];
 
 const sortByUrgency = (a: ItemWithStatus, b: ItemWithStatus): number => {
-  const statusOrder: Record<string, number> = { overdue: 0, due: 1, soon: 2, ok: 3 };
+  const statusOrder: Record<string, number> = { overdue: 0, due: 1, soon: 2, ok: 3, completed: 4 };
   const orderDiff = statusOrder[a.status]! - statusOrder[b.status]!;
   if (orderDiff !== 0) return orderDiff;
   return a.daysRemaining - b.daysRemaining;
@@ -32,16 +34,29 @@ const App = () => {
   const [editingItem, setEditingItem] = useState<ConsumableItem | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>('전체');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [lastCompletedItem, setLastCompletedItem] = useState<{ id: string; prevDate: string } | null>(null);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   const enrichedItems = useMemo<ItemWithStatus[]>(
     () => items.map(enrichItem).sort(sortByUrgency),
     [items],
   );
 
-  const pagedItems = useMemo(
-    () => activeTab === '전체' ? enrichedItems : enrichedItems.filter((i) => i.category === activeTab),
-    [enrichedItems, activeTab],
-  );
+  const pagedItems = useMemo(() => {
+    let filtered = activeTab === '전체' ? enrichedItems : enrichedItems.filter((i) => i.category === activeTab);
+
+    if (searchQuery.trim()) {
+      filtered = filtered.filter((i) =>
+        i.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    return filtered;
+  }, [enrichedItems, activeTab, searchQuery]);
 
   const visibleTips = useMemo(() => {
     const addedNames = new Set(items.map((i) => i.name));
@@ -108,8 +123,47 @@ const App = () => {
     await requestPermission();
   };
 
+  const handleMarkReplaced = (id: string) => {
+    const item = items.find((i) => i.id === id);
+    if (item) {
+      setLastCompletedItem({
+        id: item.id,
+        prevDate: item.lastReplacedAt,
+      });
+      markReplaced(id);
+      setToastMessage(`${item.name} ${item.type === '교체' ? '교체' : '세탁'} 완료했어요!`);
+    }
+  };
+
+  const handleUndoComplete = () => {
+    if (lastCompletedItem) {
+      updateItem(lastCompletedItem.id, {
+        lastReplacedAt: lastCompletedItem.prevDate,
+        completedAt: undefined,
+      });
+      setLastCompletedItem(null);
+      setToastMessage(null);
+    }
+  };
+
+  const toggleCategoryExpansion = (category: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
   const overdueCount = enrichedItems.filter(
     (i) => i.status === 'overdue' || i.status === 'due',
+  ).length;
+
+  const completedTodayCount = enrichedItems.filter(
+    (i) => i.status === 'completed',
   ).length;
 
 
@@ -130,7 +184,79 @@ const App = () => {
               </button>
             )}
           </div>
+
+          <div className="stats-cards">
+            <div className="stat-card">
+              <div className="stat-card__icon">📦</div>
+              <div className="stat-card__content">
+                <div className="stat-card__value">{items.length}</div>
+                <div className="stat-card__label">전체</div>
+              </div>
+            </div>
+            <div className="stat-card stat-card--success">
+              <div className="stat-card__icon">✅</div>
+              <div className="stat-card__content">
+                <div className="stat-card__value">{completedTodayCount}</div>
+                <div className="stat-card__label">오늘 완료</div>
+              </div>
+            </div>
+            <div className="stat-card stat-card--warning">
+              <div className="stat-card__icon">⚠️</div>
+              <div className="stat-card__content">
+                <div className="stat-card__value">{overdueCount}</div>
+                <div className="stat-card__label">교체 필요</div>
+              </div>
+            </div>
+          </div>
+
+          {showSearch && (
+            <div className="search-bar">
+              <span className="search-bar__icon">🔍</span>
+              <input
+                type="text"
+                className="search-bar__input"
+                placeholder="항목 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  className="search-bar__clear"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="검색어 지우기"
+                >
+                  ✕
+                </button>
+              )}
+              <button
+                className="search-bar__close"
+                onClick={() => {
+                  setShowSearch(false);
+                  setSearchQuery('');
+                }}
+                aria-label="검색 닫기"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="app-header__actions">
+            <button
+              className={`btn btn--ghost btn--sm${showSearch ? ' btn--active' : ''}`}
+              onClick={() => setShowSearch(!showSearch)}
+              title="검색"
+            >
+              🔍
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => setShowCalendar(true)}
+              title="캘린더"
+            >
+              📅
+            </button>
             {permission !== 'granted' && (
               <button
                 className="btn btn--ghost btn--sm"
@@ -182,7 +308,7 @@ const App = () => {
                 )}
                 <ItemCard
                   item={item}
-                  onMarkReplaced={markReplaced}
+                  onMarkReplaced={handleMarkReplaced}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                 />
@@ -194,17 +320,49 @@ const App = () => {
           <div className="hygiene-tips-section">
             <p className="hygiene-tips-section__label">🍯 교체 주기 꿀팁</p>
             {groupedTips
-              ? groupedTips.map((group) => (
-                  <div key={group.category}>
-                    <p className="hygiene-tips-section__group-header">{group.category}</p>
-                    {group.tips.map((tip) => (
-                      <HygieneTipCard key={tip.name} tip={tip} onAdd={handleAddFromTip} />
-                    ))}
-                  </div>
-                ))
-              : visibleTips.map((tip) => (
-                  <HygieneTipCard key={tip.name} tip={tip} onAdd={handleAddFromTip} />
-                ))
+              ? groupedTips.map((group) => {
+                  const isExpanded = expandedCategories.has(group.category);
+                  const displayTips = isExpanded ? group.tips : group.tips.slice(0, 3);
+                  const hasMore = group.tips.length > 3;
+
+                  return (
+                    <div key={group.category}>
+                      <p className="hygiene-tips-section__group-header">{group.category}</p>
+                      {displayTips.map((tip) => (
+                        <HygieneTipCard key={tip.name} tip={tip} onAdd={handleAddFromTip} />
+                      ))}
+                      {hasMore && (
+                        <button
+                          className="btn btn--secondary btn--sm show-more-btn"
+                          onClick={() => toggleCategoryExpansion(group.category)}
+                        >
+                          {isExpanded ? '접기 ▲' : `더보기 (${group.tips.length - 3}개 더) ▼`}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              : (() => {
+                  const isExpanded = expandedCategories.has(activeTab);
+                  const displayTips = isExpanded ? visibleTips : visibleTips.slice(0, 3);
+                  const hasMore = visibleTips.length > 3;
+
+                  return (
+                    <>
+                      {displayTips.map((tip) => (
+                        <HygieneTipCard key={tip.name} tip={tip} onAdd={handleAddFromTip} />
+                      ))}
+                      {hasMore && (
+                        <button
+                          className="btn btn--secondary btn--sm show-more-btn"
+                          onClick={() => toggleCategoryExpansion(activeTab)}
+                        >
+                          {isExpanded ? '접기 ▲' : `더보기 (${visibleTips.length - 3}개 더) ▼`}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()
             }
           </div>
         )}
@@ -245,6 +403,37 @@ const App = () => {
           onClose={handleCloseForm}
         />
       )}
+
+      {showCalendar && (
+        <div className="modal-backdrop" onClick={() => setShowCalendar(false)}>
+          <div className="modal modal--wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <h2 className="modal__title">📅 교체 일정</h2>
+              <button className="btn-icon" onClick={() => setShowCalendar(false)}>✕</button>
+            </div>
+            <div className="modal__body">
+              <CalendarView items={enrichedItems} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          onClose={() => setToastMessage(null)}
+          onUndo={lastCompletedItem ? handleUndoComplete : undefined}
+        />
+      )}
+
+      <button
+        className="fab"
+        onClick={handleOpenForm}
+        aria-label="소모품 추가"
+      >
+        <span className="fab__icon">+</span>
+        <span className="fab__tooltip">소모품 추가</span>
+      </button>
     </div>
   );
 };

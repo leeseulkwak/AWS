@@ -61,6 +61,7 @@ export const ItemForm = ({ item, defaultCategory = '부엌', defaultType = '교�
       type,
       intervalDays,
       lastReplacedAt,
+      completedAt: item?.completedAt, // 편집 시 기존 완료 날짜 유지
     });
   };
 
